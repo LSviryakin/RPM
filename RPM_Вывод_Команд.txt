@@ -1,0 +1,10 @@
+$ vagrant ssh
+[vagrant@rpm ~]$ sudo -i
+[root@rpm ~]# yum repolist enabled | grep otus
+otus                                otus-linux                                 2
+[root@rpm ~]# yum list | grep otus
+percona-release.noarch                      1.0-27                     otus
+[root@rpm ~]# yum list --showduplicates | grep otus
+nginx.x86_64                             1:1.14.1-1.el7_4.ngx          otus
+percona-release.noarch                   1.0-27                        otus
+[root@rpm ~]#
