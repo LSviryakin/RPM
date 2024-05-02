@@ -2,28 +2,59 @@
 # vim: set ft=ruby :
 ENV['VAGRANT_SERVER_URL'] = 'https://vagrant.elab.pro'
 
-Vagrant.configure(2) do |config|
-config.vm.box = "centos/7"
-config.vm.box_version = "1.0.0"
-config.vm.provider "virtualbox" do |v|
-v.memory = 256
-v.cpus = 1
-end
-config.vm.define "rpm" do |rpm|
-rpm.vm.hostname = "rpm"
-rpm.vm.provision "shell", inline: <<-SHELL
-yum install -y wget
-yum install -y redhat-lsb-core
-yum install -y rpmdevtools
-yum install -y rpm-build
-yum install -y createrepo
-yum install -y yum-utils
-yum install -y gcc
-wget https://nginx.org/packages/centos/8/SRPMS/nginx-1.20.2-1.el8.ngx.src.rpm
-rpm -i nginx-1.*
-wget https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1v/openssl-1.1.1v.tar.gz
-tar -xvf openssl-1.1.1v.tar.gz
-yum-builddep rpmbuild/SPECS/nginx.spec
-SHELL
-end
+MACHINES = {
+  :rpm => {
+        :box_name => "centos/7",
+		:box_version => "1.0.0",
+        :ip_addr => '192.168.11.101',
+	:disks => {
+		:sata1 => {
+			:dfile => './sata1.vdi',
+			:size => 250,
+			:port => 1
+		}
+	}
+  },
+}
+
+Vagrant.configure("2") do |config|
+ 
+  config.vm.provision "shell", path: "install.sh"
+
+  MACHINES.each do |boxname, boxconfig|
+	
+      config.vm.define boxname do |box|
+		
+          box.vm.box = boxconfig[:box_name]
+          box.vm.host_name = boxname.to_s
+
+          box.vm.network "forwarded_port", guest: 80, host: 8080
+
+          box.vm.network "private_network", ip: boxconfig[:ip_addr]
+
+          box.vm.provider :virtualbox do |vb|
+            	  vb.customize ["modifyvm", :id, "--memory", "256"]
+                  needsController = false
+		  boxconfig[:disks].each do |dname, dconf|
+			  unless File.exist?(dconf[:dfile])
+				vb.customize ['createhd', '--filename', dconf[:dfile], '--variant', 'Fixed', '--size', dconf[:size]]
+                                needsController =  true
+                          end
+
+		  end
+                  if needsController == true
+                     vb.customize ["storagectl", :id, "--name", "SATA", "--add", "sata" ]
+                     boxconfig[:disks].each do |dname, dconf|
+                         vb.customize ['storageattach', :id,  '--storagectl', 'SATA', '--port', dconf[:port], '--device', 0, '--type', 'hdd', '--medium', dconf[:dfile]]
+                     end
+                  end
+          end
+		
+      box.vm.provision "shell", inline: <<-SHELL
+	      mkdir -p ~root/.ssh
+          cp ~vagrant/.ssh/auth* ~root/.ssh
+  	  SHELL
+
+      end
+  end
 end
